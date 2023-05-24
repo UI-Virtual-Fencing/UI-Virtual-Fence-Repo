@@ -1,14 +1,15 @@
 #include "SPIMemory.h"
 #include <SX128XLT.h>
-const int LED1 = A1; 
-const int LED2 = A6; 
-const int LED3 = A7; 
-//const int LED4 = 8; 
-const int flashCS = A3; // Chip select for Flash
-const int BUZZER = A2;
+#include <MCP41xxx.h>
+#define LED4 = A1; 
+#define LED2 = A6; 
+#define LED3 = A7; 
+#define flashCS = A3; // Chip select for Flash
+#define BUZZER = A2;
+#define DIGIPOT_CS=A0
 SPIFlash flash(flashCS); // Our Flash is on a different SPI bus
 SX128XLT LoRa;
-
+MCP41xxx DIGIPOT(DIGIPOT_CS);
 int fail=0;
 unsigned long addr = 0x01; // Random selection
 byte data = 0x03; // Random data
@@ -20,10 +21,10 @@ byte data = 0x03; // Random data
 #define LED1 8                                  //LED used to indicate transmission
 
 #define LORA_DEVICE DEVICE_SX1280               //this is the device we are using
-
+ 
 //*******  Setup LoRa Test Parameters Here ! ***************
 
-const uint32_t Frequency = 2445000000;                     //frequency of transmissions
+//const uint32_t Frequency = 2445000000;                     //frequency of transmissions
 const uint32_t Offset = 0;                                 //offset frequency for calibration purposes
 
 //*******  Setup LoRa modem parameters here ! ***************
@@ -37,30 +38,30 @@ const uint8_t BytesToPrint = 16;                           //number of bytes of 
 
 void setup()
 {
-   pinMode(LED1,OUTPUT);
+   pinMode(LED4,OUTPUT);
    pinMode(LED2,OUTPUT);
    pinMode(LED3,OUTPUT);
-   //pinMode(LED4,OUTPUT);
+   pinMode(LED4,OUTPUT);
 
-   digitalWrite(LED1,HIGH);
+   digitalWrite(LED4,HIGH);
    digitalWrite(LED2,HIGH);
    digitalWrite(LED3,HIGH);
-   //digitalWrite(LED4,HIGH);
+   digitalWrite(LED4,HIGH);
    delay(500);
-   digitalWrite(LED1,LOW);
+   digitalWrite(LED4,LOW);
    digitalWrite(LED2,LOW);
    digitalWrite(LED3,LOW);
-   //digitalWrite(LED4,LOW);
+   digitalWrite(LED4,LOW);
    delay(500);
-   digitalWrite(LED1,HIGH);
+   digitalWrite(LED4,HIGH);
    digitalWrite(LED2,HIGH);
    digitalWrite(LED3,HIGH);
-   //digitalWrite(LED4,HIGH);
+   digitalWrite(LED4,HIGH);
    delay(500);
-   digitalWrite(LED1,LOW);
+   digitalWrite(LED4,LOW);
    digitalWrite(LED2,LOW);
    digitalWrite(LED3,LOW);
-   //digitalWrite(LED4,LOW);
+   digitalWrite(LED4,LOW);
    delay(500);
    tone(BUZZER,500);
    delay(2000);
@@ -78,7 +79,7 @@ void setup()
     }
     else
     {
-        Serial.println("Error.");
+        Serial.println("Flash Memory Error.");
         fail=1;
     }
 
@@ -92,7 +93,7 @@ void setup()
     
     if (LoRa.begin(NSS, NRESET, RFBUSY, DIO1, LORA_DEVICE))
     {
-      delay(1000);
+      
     }
     else
     {
@@ -104,13 +105,13 @@ void loop()
 {
     if(fail)
     {
-      digitalWrite(LED1,HIGH);
+      digitalWrite(LED4,HIGH);
     }
     else
     {
-      digitalWrite(LED1, HIGH);
+      digitalWrite(LED4, HIGH);
       delay(500);
-      digitalWrite(LED1, LOW);
+      digitalWrite(LED4, LOW);
       delay(500);
     }
 
