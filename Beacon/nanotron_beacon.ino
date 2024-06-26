@@ -8,26 +8,49 @@ struct Line {
   Point p1, p2;
 };
 
-float distance_master = 10;
+String self = "000000000200"; //This is where our nanoTron ID goes
+
+float distance_master = 1000;
 float radius = 10.0;
 
-int tagIDs[][2] = {{200,0},{201,0}}; //element 0 is id, element 1 is shock status (0 for not shocked, 1 for shocked)
-int tagIDsLength =  (sizeof(tagIDs) / sizeof(int))/2;
+String tagIDs[1][2] = {{"000000000201","0"}}; //element 0 is id, element 1 is shock status (0 for not shocked, 1 for shocked)
+int tagIDsLength = 1; // (sizeof(tagIDs) / sizeof(int))/2;
 int tagItter = 0;
 
 int blinkRate = 1000;
 
 //SoftwareSerial S3(15,14);
 
+//Features to be added:
+//Make the nanoRead function (and its implementation) more robust. 
+// -- We should only get the first line of any Message and discard any subsequent characters
+//Split function
+//Automatic tag discovery
+//Communication with other beacons
+//--Workload distribution
+//--Tag (and Beacon) Triangulation
+//
+//Look into other nanoTron communication commands (EIDN, EDAN, SDAT, and GDAT)
+//
+//CDMA for tag communication
+//
+//As a proof of concept/final assembly create a permeable gate setup
+
 void setup() {
   Serial.begin(115200);
   Serial.println(tagIDsLength);
   //SoftwareSerial Serial2(15,14);
   Serial2.begin(115200);
-  Serial2.print("EBID 1\r\n"); //enable blink
+  Serial2.print("SFAC\r\n"); //reset nanotron
+  Serial2.println("SNID "+ self); //set nanotron ID
+  Serial2.print("GNID\r\n");
+  //Serial2.print("EBID 1\r\n"); //enable blink
+  Serial2.print("BRAR 1\r\n"); //disable ranging broadcast
+  Serial2.print("EBID 0\r\n");
   Serial2.print("NCFG 8\r\n");  // Set *RRN response to include RSSI data
-  Serial2.print("SBIV "+String(blinkRate)+"\r\n");  //Set host to blink every 1 second
-  Serial2.print("EDNI 1\r\n"); // Activate *DNI to be able to read messagaes
+  //Serial2.print("SBIV "+String(blinkRate)+"\r\n");  //Set host to blink every 1 second
+  //Serial2.print("EDNI 1\r\n"); // Activate *DNI to be able to read messagaes
+  Serial2.print("FNIN 01 00\r\n"); //clear the DNI buffer
   
   int timeout=0;
   while(!Serial2.available()&&timeout<10)  {
@@ -41,7 +64,7 @@ void setup() {
     }
     Serial.println();
   }
-
+ /*
   for(int i=0; i<tagIDsLength; i++){
     int checks = 0;
     bool checked = false;
@@ -69,12 +92,11 @@ void setup() {
       else{
         checks++;
       }  
-      delay(blinkRate); //this guarantees that we have blinked atleast once so we don't 
+      //delay(blinkRate); //this guarantees that we have blinked atleast once so we don't 
       //potentially overwrite our message before it gets read
     }
   }
-  
-  Serial2.print("EDNI 0\r\n");
+  */
 
 }
 
@@ -84,48 +106,53 @@ void loop() {
   //allows for this, we could check all tags simultaneously. As it stands now we'll check whichever
   //tag we are concerned with this cycle and discard the ranging data for the rest.
   bool ranged = false;
-  float distance;
+  float distance = 0;
   int timeout=0;
   //while(ranged == false){  
+  Serial2.print("RATO 0 "+tagIDs[tagItter][0]+"\r\n");
+  Serial.print("RATO 0 "+tagIDs[tagItter][0]+"\r\n");
   String message = readNanoTron();
+  delay(1000);
     if(message != ""){
       Serial.println("-----------------------------");
       Serial.println(message);
-      Serial.println(getRRN(message).substring(13,25));
-      Serial.println(sFill(String(tagIDs[tagItter][0]), 12, '0'));
+      Serial.println(getRRN(message).substring(0,12));
+      Serial.println(tagIDs[tagItter][0]);
       Serial.println("-----------------------------");
     }
-    if(getRRN(message).substring(13,25)==sFill(String(tagIDs[tagItter][0]), 12, '0')){
+    
+    if(getRRN(message).substring(0,12)==tagIDs[tagItter][0]){
       ranged = true;
       distance = float(getDistance(getRRN(message)).toInt());
       Serial.println(distance);
     }
   //}
   //send command
-  if(distance < distance_master){
+  if(distance < distance_master && distance != 0){
     String c1 = "FNIN 0A 10";
-    String target = sFill(String(tagIDs[tagItter][0]), 12, '0');
+    String target = tagIDs[tagItter][0];
     String message = "111111";
     Serial2.print(c1+target+message+"\r\n");  
+    Serial.print(c1+target+message+"\r\n");  
 
-    tagIDs[tagItter][1] = 1;   
+    tagIDs[tagItter][1] = "1";   
     
   }
-  else if(distance >= distance_master && tagIDs[tagItter][1] == 1){
+  else if(distance >= distance_master && tagIDs[tagItter][1] == "1"){
     
     String c1 = "FNIN 0A 10";
-    String target = sFill(String(tagIDs[tagItter][0]), 12, '0');
+    String target = tagIDs[tagItter][0];
     String message = "000000";
     Serial2.print(c1+target+message+"\r\n");  
+    Serial.print(c1+target+message+"\r\n");  
 
-    tagIDs[tagItter][1] = 0; 
+    tagIDs[tagItter][1] = "0"; 
   }
   
   delay(blinkRate); //this guarantees that we have blinked atleast once so we don't 
   //potentially overwrite our message before it gets read
   //wait for response -- This adds an enourmous ammount of latency to the system may 
   //simply not do this
-  Serial.println(tagItter);
   if(tagItter == tagIDsLength-1){
     tagItter = 0;
   }
@@ -142,6 +169,9 @@ String sFill(String s, int len, char fill){
   }
   return filled;
 }
+// These functions need to just read the first message recieved. It seems that while *DNI is
+// activated *RRN will send an empty message. We need to discard this. ReadNanoTron2 would
+// be preferable as it is simpler 
 String readNanoTron2(){
   int timeout = 0;
   String nanoRead = "";
@@ -164,40 +194,35 @@ String readNanoTron(){
   String nanoRead = "";
   while (Serial2.available()) {
     int bad=0;
-    int lines = 0;
     char c = Serial2.read();
-    delay(1);
     if (c == '*') {
       while (!Serial2.available()) {
          //Wait for a Response
       }
       char c1 = Serial2.read();
       nanoRead = nanoRead+ String(c)+String(c1);
-      while(true){
+      for(int i=1; i<80; i++){
         while (!Serial2.available()) {
          //Wait for a Response
         }
         c = Serial2.read();               //Keep Reading in Node ID 
-        delay(1);
+        //Serial.print(c);
         if (c=='*'){
-          bad++;  //variable to check for overlapping *RRN commands
-          if(bad >= 2){
-            break;
-          }
+          bad = 1;  //variable to check for overlapping *RRN commands
+          break;
         } 
         
           //stop filling out IDBlink at new line - not needed
         if (c=='\n') {
           nanoRead = nanoRead+ String(c);
-          lines++;
-          if(lines >= 2){
-            break;         
-          }                 
+          int track=i;
+            //Serial.println(track);  //print length of serial command
+          break;                          
         }
         nanoRead = nanoRead+ String(c);
       }
-      if (bad >= 2) {    //Exit while loop if overlapping *RRN commands
-        nanoRead = "overlap"+nanoRead;
+      if (bad==1) {    //Exit while loop if overlapping *RRN commands
+        nanoRead = "overlap";
       }
     }
   }
@@ -205,6 +230,8 @@ String readNanoTron(){
 }
 
 //A split function sure would be nice. Oh well...
+//Also since we don't have both *RRNs and *DNIs at the same time we can generalize these 
+//functions.
 String getDNI(String readIn){
   String DNI = "";
   int readInSize = readIn.length();
@@ -264,7 +291,7 @@ String getMessage(String readIn){
 }
 String getDistance(String readIn){
   String distance = "";
-  int readInSize = sizeof(readIn) / sizeof(char);
+  int readInSize = readIn.length();
   int cutStart, cutEnd;
   int commaCounter = 0;
 
@@ -275,7 +302,7 @@ String getDistance(String readIn){
         cutStart = i+1;
       }
       if(commaCounter == 4){
-        cutEnd = i-1;
+        cutEnd = i;
       }
     }
   }
